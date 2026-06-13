@@ -1,2 +1,0 @@
-[console_scripts]
-sphragis = sphragis.cli:main

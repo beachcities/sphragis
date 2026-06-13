@@ -1,5 +1,7 @@
 # Sphragis
 
+[![CI](https://github.com/beachcities/sphragis/actions/workflows/ci.yml/badge.svg)](https://github.com/beachcities/sphragis/actions/workflows/ci.yml)
+
 > ἐσθλῶν μὲν γὰρ ἄπ᾽ ἐσθλὰ μαθήσεαι· ἢν δὲ κακοῖσι συμμίσγῃς, ἀπολεῖς καὶ τὸν ἐόντα νόον.
 > *From the good you will learn good things; mix with the bad, and you will lose even the sense you have.*
 > — Theognis, *Elegies* 35–36 — named by Aristotle at *Nicomachean Ethics* IX.9, 1170a11–12; quoted at IX.12, 1172a13–14
