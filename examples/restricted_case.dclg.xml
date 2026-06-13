@@ -1,0 +1,24 @@
+<doclang>
+  <head>
+    <title>Sample restricted case file</title>
+    <date>2026-06-13</date>
+    <data_classification>
+      <data_class>confidential</data_class>
+      <data_class>personal information</data_class>
+    </data_classification>
+    <pii_status>present</pii_status>
+    <pii_sensitivity_level>medium</pii_sensitivity_level>
+    <access_control_level>restricted</access_control_level>
+    <extraction_permitted>true</extraction_permitted>
+    <extraction_scope>tables_only</extraction_scope>
+    <pii_extraction_allowed>false</pii_extraction_allowed>
+    <extraction_transformation_required>redact</extraction_transformation_required>
+    <extraction_audit_required>true</extraction_audit_required>
+    <extraction_audit_retention unit="day">90</extraction_audit_retention>
+    <human_in_the_loop_required>true</human_in_the_loop_required>
+    <rag_permitted>false</rag_permitted>
+    <training_permitted>false</training_permitted>
+    <downstream_sharing_permitted>false</downstream_sharing_permitted>
+  </head>
+  <!-- document content omitted in this example -->
+</doclang>

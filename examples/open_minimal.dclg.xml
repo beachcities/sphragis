@@ -1,0 +1,21 @@
+<doclang>
+  <head>
+    <title>Sample open dataset description</title>
+    <date>2026-06-13</date>
+    <licenses>
+      <license>https://www.apache.org/licenses/LICENSE-2.0</license>
+    </licenses>
+    <data_classification>
+      <data_class>public</data_class>
+    </data_classification>
+    <pii_status>absent</pii_status>
+    <extraction_permitted>true</extraction_permitted>
+    <extraction_audit_required>true</extraction_audit_required>
+    <rag_permitted>true</rag_permitted>
+    <rag_indexing_allowed>true</rag_indexing_allowed>
+    <rag_output_attribution_required>true</rag_output_attribution_required>
+    <training_permitted>true</training_permitted>
+    <training_provenance_required>true</training_provenance_required>
+  </head>
+  <!-- document content omitted in this example -->
+</doclang>

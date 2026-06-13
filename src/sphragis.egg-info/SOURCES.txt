@@ -1,0 +1,15 @@
+LICENSE
+README.md
+pyproject.toml
+src/sphragis/__init__.py
+src/sphragis/cli.py
+src/sphragis/model.py
+src/sphragis/parser.py
+src/sphragis/policy.py
+src/sphragis.egg-info/PKG-INFO
+src/sphragis.egg-info/SOURCES.txt
+src/sphragis.egg-info/dependency_links.txt
+src/sphragis.egg-info/entry_points.txt
+src/sphragis.egg-info/requires.txt
+src/sphragis.egg-info/top_level.txt
+tests/test_policy.py
