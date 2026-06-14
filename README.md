@@ -88,6 +88,10 @@ attached to an allow.
 python3 -m unittest discover -s tests
 ```
 
+## Related
+
+- [Terminus](https://github.com/beachcities/terminus) — a concept note on the boundary of safe delegation: where machine-readable ends and "may the machine *use* it?" begins. The thinking behind this tool. (CC BY 4.0)
+
 ## License
 
 Apache-2.0
