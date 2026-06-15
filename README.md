@@ -23,7 +23,8 @@ The specification defines these elements as a **declaration**. It does not defin
 `sphragis` is a small, dependency-free evaluation layer that closes this gap: given a DocLang document and an intended operation, it returns a deterministic decision (`allow` / `allow_with_obligations` / `deny`) **before** any probabilistic processing happens. Obligations declared in the document (required transformations, audit logging, human-in-the-loop) are surfaced alongside the verdict so callers can act on them.
 
 ## Install
-
+Opening this repository in VS Code or GitHub Codespaces uses the bundled dev container (.devcontainer/), which installs the package and the demo dependencies automatically — no manual setup needed.
+To install manually instead:
 ```bash
 pip install -e .
 # optional: the reference validator for the documents themselves
