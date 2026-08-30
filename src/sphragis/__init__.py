@@ -5,6 +5,7 @@ from .parser import (
     DOCLANG_NAMESPACE,
     SPEC_VERSION,
     SUPPORTED_SPEC_VERSIONS,
+    NotADocLangDocumentError,
     UnsupportedSpecVersionError,
     parse_governance,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "DOCLANG_NAMESPACE",
     "SPEC_VERSION",
     "SUPPORTED_SPEC_VERSIONS",
+    "NotADocLangDocumentError",
     "UnsupportedSpecVersionError",
     "parse_governance",
     "evaluate",

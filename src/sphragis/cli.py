@@ -7,7 +7,12 @@ import json
 import sys
 
 from .model import Operation
-from .parser import GOVERNANCE_GROUPS, UnsupportedSpecVersionError, parse_governance
+from .parser import (
+    GOVERNANCE_GROUPS,
+    NotADocLangDocumentError,
+    UnsupportedSpecVersionError,
+    parse_governance,
+)
 from .policy import evaluate
 
 
@@ -29,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         gov = parse_governance(args.file)
-    except UnsupportedSpecVersionError as exc:
+    except (NotADocLangDocumentError, UnsupportedSpecVersionError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 2
 

@@ -17,6 +17,14 @@ class Operation(str, Enum):
 
 
 class Verdict(str, Enum):
+    """Outcome categories.
+
+    ``ALLOW_WITH_OBLIGATIONS`` means "allow, with conditions attached" —
+    the conditions being the decision's ``obligations`` (duties) and/or
+    ``constraints`` (restrictions). The historical name is kept for wire
+    compatibility; read it as *allow-with-conditions*.
+    """
+
     ALLOW = "allow"
     ALLOW_WITH_OBLIGATIONS = "allow_with_obligations"
     DENY = "deny"
