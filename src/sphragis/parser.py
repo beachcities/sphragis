@@ -40,6 +40,16 @@ class UnsupportedSpecVersionError(ValueError):
     """The document's root declares a spec version this kit does not track."""
 
 
+class NotADocLangDocumentError(ValueError):
+    """The root element is not ``<doclang>`` in an accepted namespace.
+
+    Per the official schema, the root's local name must be ``doclang`` and
+    its namespace must be empty or the official DocLang namespace. Anything
+    else is refused outright so foreign documents can never smuggle in
+    governance declarations that an evaluator would then trust.
+    """
+
+
 # Element names listed in the DocLang spec's "Governance and compliance
 # metadata" (Future Extensions). Grouped here for reference and for `inspect`.
 GOVERNANCE_GROUPS: dict[str, tuple[str, ...]] = {
@@ -166,13 +176,21 @@ def parse_governance(path: str | Path) -> Governance:
     """Extract document-level governance metadata from a ``.dclg`` /
     ``.dclg.xml`` file.
 
-    The root's ``version`` attribute, when present, is checked against the
-    spec versions this kit tracks (``SUPPORTED_SPEC_VERSIONS``) and surfaced
-    as ``Governance.spec_version``; an unsupported declared version raises
+    The root element must be ``<doclang>`` in an accepted namespace, else
+    :class:`NotADocLangDocumentError` is raised. The root's ``version``
+    attribute, when present, is checked against the spec versions this kit
+    tracks (``SUPPORTED_SPEC_VERSIONS``) and surfaced as
+    ``Governance.spec_version``; an unsupported declared version raises
     :class:`UnsupportedSpecVersionError`. A missing attribute is tolerated.
     """
     tree = ET.parse(str(path))
     root = tree.getroot()
+
+    if _local(root.tag) != "doclang":
+        raise NotADocLangDocumentError(
+            f"root element is {root.tag!r}; expected <doclang> in the empty "
+            f"namespace or the official namespace {DOCLANG_NAMESPACE!r}"
+        )
 
     spec_version = root.get("version")
     if spec_version is not None and spec_version not in SUPPORTED_SPEC_VERSIONS:
