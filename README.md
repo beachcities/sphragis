@@ -36,14 +36,14 @@ pip install "doclang[schematron-saxon]"
 
 ```bash
 # What does this document declare?
-sphragis inspect examples/restricted_case.dclg.xml
+sphragis inspect examples/restricted_case.dclg
 
 # May I extract data from it, given the request touches personal data?
-sphragis evaluate examples/restricted_case.dclg.xml --op extract --involves-pii
+sphragis evaluate examples/restricted_case.dclg --op extract --involves-pii
 # -> {"verdict": "deny", "reasons": ["operation involves PII and pii_extraction_allowed is declared false"], ...}
 
 # May I use this document for training?
-sphragis evaluate examples/open_minimal.dclg.xml --op train
+sphragis evaluate examples/open_minimal.dclg --op train
 # -> {"verdict": "allow_with_obligations", "obligations": ["training_provenance_required"], ...}
 ```
 
@@ -52,7 +52,7 @@ As a library:
 ```python
 from sphragis import Operation, evaluate, parse_governance
 
-gov = parse_governance("document.dclg.xml")
+gov = parse_governance("document.dclg")
 decision = evaluate(gov, Operation.RAG_INDEX, strict=True)
 ```
 
@@ -68,7 +68,8 @@ decision = evaluate(gov, Operation.RAG_INDEX, strict=True)
 - Tracks the governance and compliance metadata of DocLang specification version **0.7** (reference toolkit **v0.7.3**, July 2026 — the two are versioned separately). This metadata lives in the spec's *Future Extensions* section (informative, not yet normative; titled Appendix C in v0.4); the governance vocabulary and policy controls are substantively unchanged from spec 0.4 (toolkit v0.4.0) through spec 0.7 (toolkit v0.7.3), so this kit's interpretation — originally pinned at v0.4.0 — remains current. The spec is young and may change.
 - The document root's `version` attribute is checked on parse: a declared spec version outside 0.4–0.7 is rejected (`UnsupportedSpecVersionError`; the CLI reports it as a JSON error with exit code 2); a missing attribute is tolerated.
 - Elements are recognized in the empty namespace and the official DocLang namespace (`https://www.doclang.ai/ns/v0`) only; foreign-namespace elements are ignored. The root element must be `<doclang>` in one of those namespaces — anything else is refused (`NotADocLangDocumentError`, reported by the CLI as a JSON error with exit code 2).
-- Since spec 0.7 the recommended file extensions are `.dclg` (document) and `.dclx` (archive). The bundled examples keep their historical `.dclg.xml` names; the evaluator does not depend on the extension.
+- Since spec 0.7 the recommended file extensions are `.dclg` (document) and `.dclx` (archive). The bundled examples use `.dclg`; the evaluator does not depend on the extension.
+- The bundled examples are valid DocLang 0.7 documents: CI validates them with the reference toolkit's **XSD and Schematron** checks (`doclang validate`, toolkit v0.7.3). The governance elements they carry come from the spec's informative *Future Extensions* section, and the current 0.7 schema accepts them inside `<head>` — so a separate schema-exempt fixture set is not needed today. Should a future schema tighten `<head>`, governance fixtures will be split from the schema-validated fixtures and the split documented here and in CI.
 - Document-level metadata only. Component-level overrides (defined by the spec) are planned.
 - Controlled vocabularies for enumerated values (e.g. `extraction_scope`) are organization-defined per the spec; this kit surfaces them as constraints rather than interpreting them.
 - This is an independent project, not affiliated with the DocLang project or the LF AI & Data Foundation.
@@ -93,6 +94,12 @@ attached to an allow.
 ```bash
 python3 -m unittest discover -s tests
 ```
+
+CI additionally builds the wheel, installs it into a clean environment, and
+runs `scripts/cli_smoke.sh` against the installed CLI (inspect, the three
+verdict paths, and the JSON error paths), plus Ruff, mypy, DocLang XSD and
+Schematron validation of the examples, and a check that no reference to the
+legacy double extension (`.dclg` + `.xml`) remains anywhere in the repo.
 
 ## Related
 
