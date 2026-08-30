@@ -2,6 +2,7 @@
 
 from .model import Decision, Governance, Operation, Verdict
 from .parser import (
+    DOCLANG_NAMESPACE,
     SPEC_VERSION,
     SUPPORTED_SPEC_VERSIONS,
     UnsupportedSpecVersionError,
@@ -14,6 +15,7 @@ __all__ = [
     "Governance",
     "Operation",
     "Verdict",
+    "DOCLANG_NAMESPACE",
     "SPEC_VERSION",
     "SUPPORTED_SPEC_VERSIONS",
     "UnsupportedSpecVersionError",

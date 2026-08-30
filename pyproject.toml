@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sphragis"
-version = "0.0.1"
+version = "0.0.2"
 description = "Deterministic evaluation of DocLang governance and compliance metadata"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,7 +22,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-validate = ["doclang"]
+validate = ["doclang[schematron-saxon]"]
 
 [project.urls]
 Repository = "https://github.com/beachcities/sphragis"

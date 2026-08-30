@@ -40,8 +40,8 @@ class Governance:
     def get(self, name: str) -> str | None:
         value = self.elements.get(name)
         if isinstance(value, list):
-            return value[0] if value else None
-        return value
+            value = value[0] if value else None
+        return value if isinstance(value, str) else None
 
     def get_bool(self, name: str) -> bool | None:
         value = self.get(name)
@@ -57,12 +57,19 @@ class Governance:
 
 @dataclass
 class Decision:
-    """Outcome of evaluating one operation against one document."""
+    """Outcome of evaluating one operation against one document.
+
+    ``obligations`` are duties the caller must perform (e.g.
+    ``rag_audit_required``); ``constraints`` are restrictions the caller
+    must honor — declared prohibitions (``rag_caching_allowed=false``) and
+    scoped values (``extraction_scope=tables_only``).
+    """
 
     operation: Operation
     verdict: Verdict
     reasons: list[str] = field(default_factory=list)
     obligations: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -70,4 +77,5 @@ class Decision:
             "verdict": self.verdict.value,
             "reasons": self.reasons,
             "obligations": self.obligations,
+            "constraints": self.constraints,
         }
