@@ -34,8 +34,10 @@ def main(argv: list[str] | None = None) -> int:
             group: {k: gov.elements[k] for k in names if k in gov.elements}
             for group, names in GOVERNANCE_GROUPS.items()
         }
-        print(json.dumps({g: v for g, v in grouped.items() if v},
-                         indent=2, ensure_ascii=False))
+        out: dict = {g: v for g, v in grouped.items() if v}
+        if gov.spec_version is not None:
+            out = {"spec_version": gov.spec_version, **out}
+        print(json.dumps(out, indent=2, ensure_ascii=False))
         return 0
 
     decision = evaluate(

@@ -30,9 +30,12 @@ class Governance:
     Values are stored as strings exactly as they appear in the document.
     Elements with a ``unit`` attribute are stored as ``"<value> <unit>"``.
     Repeated elements (e.g. ``<license>``) are stored as lists.
+    ``spec_version`` is the DocLang spec version declared on the document
+    root (``version`` attribute), or ``None`` when absent.
     """
 
     elements: dict[str, object] = field(default_factory=dict)
+    spec_version: str | None = None
 
     def get(self, name: str) -> str | None:
         value = self.elements.get(name)

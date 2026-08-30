@@ -1,12 +1,15 @@
 """Parse governance and compliance metadata from a DocLang document.
 
-Per the DocLang specification, governance and compliance metadata MUST be
-expressed at the document level inside ``<head>`` (and MAY be overridden at
-component level; component-level overrides are not yet implemented here).
+Per the DocLang specification's *Future Extensions* appendix (informative),
+governance and compliance metadata MUST be expressed at the document level
+inside ``<head>`` (and MAY be overridden at component level; component-level
+overrides are not yet implemented here).
 
 This parser is deliberately tolerant: it reads what is present and reports
 it. Validation of the document itself should be done with the reference
-validator (``pip install doclang`` -> ``doclang validate``).
+validator (``pip install "doclang[schematron-saxon]"`` -> ``doclang validate``).
+Documents with a default XML namespace are handled transparently: element
+names are matched by their local name.
 """
 
 from __future__ import annotations
@@ -16,8 +19,21 @@ from pathlib import Path
 
 from .model import Governance
 
-# Element names defined in the DocLang spec (v0.4.0), "Governance and
-# compliance metadata". Grouped here for reference and for `inspect`.
+# The DocLang *specification* version whose governance appendix this kit
+# tracks (distinct from the reference-toolkit release, currently v0.7.3).
+SPEC_VERSION = "0.7"
+
+# Spec versions whose governance appendix text is identical to the tracked
+# one (unchanged from spec 0.4 / toolkit v0.4.0 through spec 0.7 / v0.7.3).
+SUPPORTED_SPEC_VERSIONS: frozenset[str] = frozenset({"0.4", "0.5", "0.6", "0.7"})
+
+
+class UnsupportedSpecVersionError(ValueError):
+    """The document's root declares a spec version this kit does not track."""
+
+
+# Element names listed in the DocLang spec's "Governance and compliance
+# metadata" (Future Extensions). Grouped here for reference and for `inspect`.
 GOVERNANCE_GROUPS: dict[str, tuple[str, ...]] = {
     "licensing_compliance": (
         "licenses",
@@ -90,6 +106,7 @@ GOVERNANCE_GROUPS: dict[str, tuple[str, ...]] = {
         "training_scope",
         "training_purpose",
         "training_model_type",
+        "training_data_retention",
         "training_dataset_reuse_allowed",
         "training_derivative_sharing_permitted",
         "training_pii_included",
@@ -122,23 +139,46 @@ def _text_with_unit(elem: ET.Element) -> str:
     return f"{text} {unit}" if unit else text
 
 
+def _local(tag: object) -> str:
+    """Local name of an element tag, with any ``{namespace}`` prefix removed."""
+    if not isinstance(tag, str):  # comments / processing instructions
+        return ""
+    return tag.rsplit("}", 1)[-1]
+
+
 def parse_governance(path: str | Path) -> Governance:
-    """Extract document-level governance metadata from a ``.dclg.xml`` file."""
+    """Extract document-level governance metadata from a ``.dclg`` /
+    ``.dclg.xml`` file.
+
+    The root's ``version`` attribute, when present, is checked against the
+    spec versions this kit tracks (``SUPPORTED_SPEC_VERSIONS``) and surfaced
+    as ``Governance.spec_version``; an unsupported declared version raises
+    :class:`UnsupportedSpecVersionError`. A missing attribute is tolerated.
+    """
     tree = ET.parse(str(path))
     root = tree.getroot()
-    head = root.find("head")
-    gov = Governance()
+
+    spec_version = root.get("version")
+    if spec_version is not None and spec_version not in SUPPORTED_SPEC_VERSIONS:
+        raise UnsupportedSpecVersionError(
+            f"document declares spec version {spec_version!r}; "
+            f"this kit tracks {SPEC_VERSION} "
+            f"(supported: {', '.join(sorted(SUPPORTED_SPEC_VERSIONS))})"
+        )
+
+    head = next((child for child in root if _local(child.tag) == "head"), None)
+    gov = Governance(spec_version=spec_version)
     if head is None:
         return gov
 
     for child in head:
-        tag = child.tag
+        tag = _local(child.tag)
         if tag in _CONTAINERS:
             item_tag = _CONTAINERS[tag]
             values = [
                 (item.text or "").strip()
-                for item in child.iter(item_tag)
-                if (item.text or "").strip()
+                for item in child.iter()
+                if _local(item.tag) == item_tag and (item.text or "").strip()
             ]
             if values:
                 gov.elements[tag] = values

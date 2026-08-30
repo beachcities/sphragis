@@ -64,6 +64,7 @@ _RULES: dict[Operation, dict[str, tuple[str, ...]]] = {
             "training_scope",
             "training_purpose",
             "training_model_type",
+            "training_data_retention",
             "training_transformation_required",
             "training_provenance_required",
             "training_audit_required",
@@ -101,6 +102,7 @@ def evaluate(
 
     # --- gates -----------------------------------------------------------
     explicit_allow = False
+    undeclared_gates: list[str] = []
     for gate in rules["gates"]:
         value = gov.get_bool(gate)
         if value is False:
@@ -113,6 +115,7 @@ def evaluate(
             explicit_allow = True
             reasons.append(f"{gate} is declared true")
         else:
+            undeclared_gates.append(gate)
             reasons.append(f"{gate} is not declared")
 
     # --- PII gates -------------------------------------------------------
@@ -135,13 +138,19 @@ def evaluate(
                 )
 
     # --- unspecified handling ---------------------------------------------
-    if not explicit_allow:
-        if strict:
-            return Decision(
-                operation,
-                Verdict.DENY,
-                reasons=reasons + ["no explicit permission found (strict posture)"],
+    # In strict posture EVERY gate must be explicitly true: a partially
+    # declared gate set (e.g. rag_permitted=true without rag_indexing_allowed)
+    # must not slip through on the strength of one gate alone.
+    if strict and undeclared_gates:
+        if not explicit_allow:
+            extra = "no explicit permission found (strict posture)"
+        else:
+            extra = (
+                "gate(s) not explicitly permitted (strict posture): "
+                + ", ".join(undeclared_gates)
             )
+        return Decision(operation, Verdict.DENY, reasons=reasons + [extra])
+    if not explicit_allow:
         return Decision(operation, Verdict.UNSPECIFIED, reasons=reasons)
 
     # --- obligations -------------------------------------------------------
@@ -149,9 +158,14 @@ def evaluate(
         value = gov.get(name)
         if value is None:
             continue
-        if gov.get_bool(name) is True:
+        as_bool = gov.get_bool(name)
+        if as_bool is True:
             obligations.append(name)
-        elif gov.get_bool(name) is None:  # non-boolean constraint values
+        elif as_bool is False:
+            # A declared prohibition (e.g. rag_caching_allowed=false) is a
+            # constraint the caller must honor: surface it, never drop it.
+            obligations.append(f"{name}=false")
+        else:  # non-boolean constraint values
             obligations.append(f"{name}={value}")
 
     verdict = Verdict.ALLOW_WITH_OBLIGATIONS if obligations else Verdict.ALLOW
