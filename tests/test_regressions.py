@@ -27,9 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from sphragis import (
     DOCLANG_NAMESPACE,
+    SUPPORTED_SPEC_VERSIONS,
     NotADocLangDocumentError,
     Operation,
-    SUPPORTED_SPEC_VERSIONS,
     UnsupportedSpecVersionError,
     Verdict,
     evaluate,

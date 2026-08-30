@@ -21,7 +21,13 @@ _SRC = Path(__file__).resolve().parents[1] / "src"
 if _SRC.exists():
     sys.path.insert(0, str(_SRC))
 
-from sphragis import Governance, Operation, Verdict, evaluate, parse_governance  # noqa: E402
+from sphragis import (
+    Governance,
+    Operation,
+    Verdict,
+    evaluate,
+    parse_governance,
+)
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 

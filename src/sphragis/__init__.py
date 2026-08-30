@@ -12,16 +12,16 @@ from .parser import (
 from .policy import evaluate
 
 __all__ = [
-    "Decision",
-    "Governance",
-    "Operation",
-    "Verdict",
     "DOCLANG_NAMESPACE",
     "SPEC_VERSION",
     "SUPPORTED_SPEC_VERSIONS",
+    "Decision",
+    "Governance",
     "NotADocLangDocumentError",
+    "Operation",
     "UnsupportedSpecVersionError",
-    "parse_governance",
+    "Verdict",
     "evaluate",
+    "parse_governance",
 ]
 __version__ = "0.0.2"
