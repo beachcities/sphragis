@@ -1,7 +1,8 @@
 """Parse governance and compliance metadata from a DocLang document.
 
-Per the DocLang specification's *Future Extensions* appendix (informative),
-governance and compliance metadata MUST be expressed at the document level
+Per the DocLang specification's *Future Extensions* section (informative;
+titled Appendix C in v0.4), governance and compliance metadata MUST be
+expressed at the document level
 inside ``<head>`` (and MAY be overridden at component level; component-level
 overrides are not yet implemented here).
 

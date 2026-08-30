@@ -70,7 +70,7 @@ decision = evaluate(gov, Operation.RAG_INDEX, strict=True)
 - Elements are recognized in the empty namespace and the official DocLang namespace (`https://www.doclang.ai/ns/v0`) only; foreign-namespace elements are ignored.
 - Since spec 0.7 the recommended file extensions are `.dclg` (document) and `.dclx` (archive). The bundled examples keep their historical `.dclg.xml` names; the evaluator does not depend on the extension.
 - Document-level metadata only. Component-level overrides (defined by the spec) are planned.
-- Controlled vocabularies for enumerated values (e.g. `extraction_scope`) are organization-defined per the spec; this kit surfaces them as obligations rather than interpreting them.
+- Controlled vocabularies for enumerated values (e.g. `extraction_scope`) are organization-defined per the spec; this kit surfaces them as constraints rather than interpreting them.
 - This is an independent project, not affiliated with the DocLang project or the LF AI & Data Foundation.
 
 ## Demo
