@@ -8,8 +8,9 @@ overrides are not yet implemented here).
 This parser is deliberately tolerant: it reads what is present and reports
 it. Validation of the document itself should be done with the reference
 validator (``pip install "doclang[schematron-saxon]"`` -> ``doclang validate``).
-Documents with a default XML namespace are handled transparently: element
-names are matched by their local name.
+Elements in no namespace or in the official DocLang namespace
+(``https://www.doclang.ai/ns/v0``) are recognized; elements in any other
+namespace are ignored rather than mistaken for governance declarations.
 """
 
 from __future__ import annotations
@@ -23,9 +24,15 @@ from .model import Governance
 # tracks (distinct from the reference-toolkit release, currently v0.7.3).
 SPEC_VERSION = "0.7"
 
-# Spec versions whose governance appendix text is identical to the tracked
-# one (unchanged from spec 0.4 / toolkit v0.4.0 through spec 0.7 / v0.7.3).
+# Spec versions across which the governance vocabulary and policy controls
+# are substantively unchanged (spec 0.4 / toolkit v0.4.0 through spec 0.7 /
+# toolkit v0.7.3).
 SUPPORTED_SPEC_VERSIONS: frozenset[str] = frozenset({"0.4", "0.5", "0.6", "0.7"})
+
+# The official DocLang XML namespace (the spec's optional default xmlns).
+DOCLANG_NAMESPACE = "https://www.doclang.ai/ns/v0"
+
+_ALLOWED_NAMESPACES: frozenset[str] = frozenset({"", DOCLANG_NAMESPACE})
 
 
 class UnsupportedSpecVersionError(ValueError):
@@ -140,10 +147,18 @@ def _text_with_unit(elem: ET.Element) -> str:
 
 
 def _local(tag: object) -> str:
-    """Local name of an element tag, with any ``{namespace}`` prefix removed."""
+    """Local name of a tag in an accepted namespace, else ``""``.
+
+    Accepted namespaces are the empty namespace and the official DocLang
+    namespace; a tag in any other namespace yields ``""`` so it is never
+    mistaken for a governance declaration.
+    """
     if not isinstance(tag, str):  # comments / processing instructions
         return ""
-    return tag.rsplit("}", 1)[-1]
+    if tag.startswith("{"):
+        namespace, _, local = tag[1:].partition("}")
+        return local if namespace in _ALLOWED_NAMESPACES else ""
+    return tag
 
 
 def parse_governance(path: str | Path) -> Governance:

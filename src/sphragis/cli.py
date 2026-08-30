@@ -7,7 +7,7 @@ import json
 import sys
 
 from .model import Operation
-from .parser import GOVERNANCE_GROUPS, parse_governance
+from .parser import GOVERNANCE_GROUPS, UnsupportedSpecVersionError, parse_governance
 from .policy import evaluate
 
 
@@ -27,7 +27,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="the concrete request would touch personal data")
 
     args = parser.parse_args(argv)
-    gov = parse_governance(args.file)
+    try:
+        gov = parse_governance(args.file)
+    except UnsupportedSpecVersionError as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
 
     if args.command == "inspect":
         grouped = {

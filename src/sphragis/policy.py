@@ -18,8 +18,10 @@ from __future__ import annotations
 from .model import Decision, Governance, Operation, Verdict
 
 # For each operation: the gate elements (all must not be False; in strict
-# mode all must be explicitly True) and the obligation elements
-# (surfaced when present).
+# mode all must be explicitly True) and the condition elements surfaced when
+# present. Conditions split by meaning: `*_required` booleans are duties
+# (obligations), `*_allowed` / `*_permitted` booleans declared false are
+# prohibitions (constraints), and valued elements are scoped constraints.
 _RULES: dict[Operation, dict[str, tuple[str, ...]]] = {
     Operation.EXTRACT: {
         "gates": ("extraction_permitted",),
@@ -99,6 +101,7 @@ def evaluate(
     rules = _RULES[operation]
     reasons: list[str] = []
     obligations: list[str] = []
+    constraints: list[str] = []
 
     # --- gates -----------------------------------------------------------
     explicit_allow = False
@@ -153,20 +156,41 @@ def evaluate(
     if not explicit_allow:
         return Decision(operation, Verdict.UNSPECIFIED, reasons=reasons)
 
-    # --- obligations -------------------------------------------------------
+    # --- conditions: obligations vs constraints ----------------------------
     for name in rules["obligations"]:
-        value = gov.get(name)
-        if value is None:
+        declared = gov.get(name)
+        if declared is None:
             continue
         as_bool = gov.get_bool(name)
-        if as_bool is True:
-            obligations.append(name)
-        elif as_bool is False:
-            # A declared prohibition (e.g. rag_caching_allowed=false) is a
-            # constraint the caller must honor: surface it, never drop it.
-            obligations.append(f"{name}=false")
-        else:  # non-boolean constraint values
-            obligations.append(f"{name}={value}")
+        if name.endswith("_required"):
+            # A duty to perform. False means "not required" and imposes
+            # nothing; a non-boolean value is a duty with a parameter
+            # (e.g. extraction_transformation_required=redact).
+            if as_bool is True:
+                obligations.append(name)
+            elif as_bool is None:
+                obligations.append(f"{name}={declared}")
+        elif name.endswith(("_allowed", "_permitted")):
+            # A permission. False is a prohibition the caller must honor
+            # (e.g. rag_caching_allowed=false): surface it, never drop it.
+            # True grants and imposes nothing.
+            if as_bool is False:
+                constraints.append(f"{name}=false")
+            elif as_bool is None:
+                constraints.append(f"{name}={declared}")
+        else:
+            # Scoped constraint values (scope, purpose, retention, ...).
+            constraints.append(f"{name}={declared}")
 
-    verdict = Verdict.ALLOW_WITH_OBLIGATIONS if obligations else Verdict.ALLOW
-    return Decision(operation, verdict, reasons=reasons, obligations=obligations)
+    verdict = (
+        Verdict.ALLOW_WITH_OBLIGATIONS
+        if obligations or constraints
+        else Verdict.ALLOW
+    )
+    return Decision(
+        operation,
+        verdict,
+        reasons=reasons,
+        obligations=obligations,
+        constraints=constraints,
+    )
