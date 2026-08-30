@@ -20,3 +20,81 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Run tests (stdlib only, no install needed)
         run: python -m unittest discover -s tests -v
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install linters
+        run: pip install ruff mypy
+      - name: Ruff
+        run: ruff check src tests demo
+      - name: mypy
+        run: mypy src/sphragis
+
+  no-legacy-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no legacy dclg-dot-xml references remain
+        run: |
+          if grep -rn --exclude-dir=.git -e 'dclg[.]xml' .; then
+            echo '::error::legacy references found (see above)'
+            exit 1
+          fi
+          echo "no legacy references"
+
+  build-install-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: python -m pip wheel . --no-deps -w dist
+      - name: Assert wheel name matches project version (and __version__)
+        run: |
+          VER=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          PKG_VER=$(python -c "import sys; sys.path.insert(0,'src'); import sphragis; print(sphragis.__version__)")
+          test "$VER" = "$PKG_VER" || { echo "::error::pyproject ($VER) != __version__ ($PKG_VER)"; exit 1; }
+          test -e "dist/sphragis-$VER-py3-none-any.whl" || { echo "::error::expected dist/sphragis-$VER-py3-none-any.whl"; ls dist; exit 1; }
+          ls dist
+      - name: Install wheel into a clean venv
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/sphragis-*.whl
+      - name: Smoke test the installed CLI
+        run: PATH="/tmp/venv/bin:$PATH" bash scripts/cli_smoke.sh
+
+  doclang-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install DocLang reference toolkit (with Schematron backend)
+        run: pip install "doclang[schematron-saxon]"
+      - name: Validate examples (XSD)
+        run: |
+          for f in examples/*.dclg; do
+            echo "== XSD: $f"
+            doclang validate --xsd-only "$f"
+          done
+      - name: Validate examples (Schematron)
+        run: |
+          for f in examples/*.dclg; do
+            echo "== Schematron: $f"
+            doclang validate --schematron-only "$f"
+          done
+      - name: Note on governance elements
+        run: |
+          echo "The governance elements in these fixtures come from the spec's"
+          echo "informative Future Extensions section; the current 0.7 schema"
+          echo "accepts them inside <head>, so the fixtures are fully"
+          echo "schema-validated. If a future schema tightens <head>, split"
+          echo "governance fixtures from schema-validated fixtures here."

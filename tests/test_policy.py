@@ -11,7 +11,7 @@ EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 class OpenMinimalTests(unittest.TestCase):
     def setUp(self):
-        self.gov = parse_governance(EXAMPLES / "open_minimal.dclg.xml")
+        self.gov = parse_governance(EXAMPLES / "open_minimal.dclg")
 
     def test_extract_allowed_with_audit_obligation(self):
         d = evaluate(self.gov, Operation.EXTRACT)
@@ -34,7 +34,7 @@ class OpenMinimalTests(unittest.TestCase):
 
 class RestrictedCaseTests(unittest.TestCase):
     def setUp(self):
-        self.gov = parse_governance(EXAMPLES / "restricted_case.dclg.xml")
+        self.gov = parse_governance(EXAMPLES / "restricted_case.dclg")
 
     def test_rag_denied(self):
         d = evaluate(self.gov, Operation.RAG_INDEX)

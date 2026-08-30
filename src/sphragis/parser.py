@@ -173,8 +173,7 @@ def _local(tag: object) -> str:
 
 
 def parse_governance(path: str | Path) -> Governance:
-    """Extract document-level governance metadata from a ``.dclg`` /
-    ``.dclg.xml`` file.
+    """Extract document-level governance metadata from a ``.dclg`` file.
 
     The root element must be ``<doclang>`` in an accepted namespace, else
     :class:`NotADocLangDocumentError` is raised. The root's ``version``
