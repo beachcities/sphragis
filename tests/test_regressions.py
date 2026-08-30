@@ -11,6 +11,11 @@ Covers three fixed regressions plus root spec-version checking:
    declared false (``*_audit_required`` = false) must impose nothing.
 4. The root ``version`` attribute is surfaced and validated (spec version,
    e.g. ``0.7`` — distinct from the reference-toolkit release, e.g. v0.7.3).
+5. The root element itself is validated: only ``<doclang>`` in the empty or
+   official namespace is accepted (``NotADocLangDocumentError`` otherwise).
+6. TRAIN honors its PII elements as gates and surfaces reuse/sharing
+   prohibitions as constraints; RAG_RETRIEVE surfaces
+   ``rag_downstream_sharing_permitted=false`` as a constraint.
 """
 
 import sys
@@ -22,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from sphragis import (
     DOCLANG_NAMESPACE,
+    NotADocLangDocumentError,
     Operation,
     SUPPORTED_SPEC_VERSIONS,
     UnsupportedSpecVersionError,
@@ -128,11 +134,9 @@ class NamespaceTests(unittest.TestCase):
         self.assertEqual(d.verdict, Verdict.ALLOW_WITH_OBLIGATIONS)
         self.assertIn("extraction_scope=tables_only", d.constraints)
 
-    def test_foreign_namespace_is_not_governance(self):
-        gov = _parse(self.FOREIGN)
-        self.assertEqual(gov.elements, {})
-        d = evaluate(gov, Operation.RAG_INDEX, strict=True)
-        self.assertEqual(d.verdict, Verdict.DENY)
+    def test_foreign_namespace_root_is_rejected(self):
+        with self.assertRaises(NotADocLangDocumentError):
+            _parse(self.FOREIGN)
 
 
 class ProhibitionSurfacedTests(unittest.TestCase):
@@ -190,6 +194,133 @@ class ProhibitionSurfacedTests(unittest.TestCase):
         self.assertEqual(d.verdict, Verdict.ALLOW)
         self.assertEqual(d.obligations, [])
         self.assertEqual(d.constraints, [])
+
+
+class RootValidationTests(unittest.TestCase):
+    """Regression 5: only <doclang> in an accepted namespace is a document."""
+
+    WRONG_ROOT = """
+    <not_doclang>
+      <head>
+        <rag_permitted>true</rag_permitted>
+        <rag_indexing_allowed>true</rag_indexing_allowed>
+      </head>
+    </not_doclang>
+    """
+
+    MIXED = f"""
+    <not_doclang>
+      <head xmlns="{DOCLANG_NAMESPACE}">
+        <rag_permitted>true</rag_permitted>
+        <rag_indexing_allowed>true</rag_indexing_allowed>
+      </head>
+    </not_doclang>
+    """
+
+    def test_wrong_root_name_is_rejected(self):
+        with self.assertRaises(NotADocLangDocumentError):
+            _parse(self.WRONG_ROOT)
+
+    def test_foreign_root_with_official_namespace_head_is_rejected(self):
+        with self.assertRaises(NotADocLangDocumentError):
+            _parse(self.MIXED)
+
+    def test_official_namespace_root_is_accepted(self):
+        gov = _parse(
+            f'<doclang xmlns="{DOCLANG_NAMESPACE}"><head>'
+            "<rag_permitted>true</rag_permitted></head></doclang>"
+        )
+        self.assertEqual(gov.get_bool("rag_permitted"), True)
+
+    def test_cli_reports_wrong_root_without_traceback(self):
+        import contextlib
+        import io
+
+        from sphragis.cli import main as cli_entry
+
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".dclg", delete=False, encoding="utf-8"
+        ) as fh:
+            fh.write(self.WRONG_ROOT)
+            name = fh.name
+        stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(stderr):
+                code = cli_entry(["evaluate", name, "--op", "rag_index"])
+        finally:
+            Path(name).unlink(missing_ok=True)
+        self.assertEqual(code, 2)
+        self.assertIn('"error"', stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+
+class TrainGovernanceTests(unittest.TestCase):
+    """Regression 6: TRAIN honors its PII elements and reuse/sharing
+    prohibitions; RAG_RETRIEVE surfaces downstream-sharing prohibition."""
+
+    PII_EXCLUDED = """
+    <doclang>
+      <head>
+        <training_permitted>true</training_permitted>
+        <training_pii_included>false</training_pii_included>
+        <training_sensitive_data_included>false</training_sensitive_data_included>
+      </head>
+    </doclang>
+    """
+
+    REUSE_FORBIDDEN = """
+    <doclang>
+      <head>
+        <training_permitted>true</training_permitted>
+        <training_dataset_reuse_allowed>false</training_dataset_reuse_allowed>
+        <training_derivative_sharing_permitted>false</training_derivative_sharing_permitted>
+      </head>
+    </doclang>
+    """
+
+    RAG_NO_DOWNSTREAM = """
+    <doclang>
+      <head>
+        <rag_permitted>true</rag_permitted>
+        <rag_pii_exposure_allowed>true</rag_pii_exposure_allowed>
+        <rag_sensitive_data_exposure_allowed>true</rag_sensitive_data_exposure_allowed>
+        <rag_downstream_sharing_permitted>false</rag_downstream_sharing_permitted>
+      </head>
+    </doclang>
+    """
+
+    def test_train_with_pii_denied_when_pii_excluded(self):
+        gov = _parse(self.PII_EXCLUDED)
+        d = evaluate(gov, Operation.TRAIN, strict=True, involves_pii=True)
+        self.assertEqual(d.verdict, Verdict.DENY)
+        self.assertIn("training_pii_included is declared false", d.reasons[0])
+
+    def test_train_with_pii_denied_in_strict_when_undeclared(self):
+        gov = _parse(
+            "<doclang><head>"
+            "<training_permitted>true</training_permitted>"
+            "</head></doclang>"
+        )
+        d = evaluate(gov, Operation.TRAIN, strict=True, involves_pii=True)
+        self.assertEqual(d.verdict, Verdict.DENY)
+
+    def test_train_without_pii_still_allowed(self):
+        gov = _parse(self.PII_EXCLUDED)
+        d = evaluate(gov, Operation.TRAIN, strict=True, involves_pii=False)
+        self.assertEqual(d.verdict, Verdict.ALLOW)
+
+    def test_reuse_and_sharing_prohibitions_surface_as_constraints(self):
+        gov = _parse(self.REUSE_FORBIDDEN)
+        d = evaluate(gov, Operation.TRAIN, strict=True)
+        self.assertEqual(d.verdict, Verdict.ALLOW_WITH_OBLIGATIONS)
+        self.assertIn("training_dataset_reuse_allowed=false", d.constraints)
+        self.assertIn("training_derivative_sharing_permitted=false", d.constraints)
+
+    def test_rag_retrieve_downstream_sharing_prohibition_surfaces(self):
+        gov = _parse(self.RAG_NO_DOWNSTREAM)
+        d = evaluate(gov, Operation.RAG_RETRIEVE, strict=True, involves_pii=True)
+        self.assertEqual(d.verdict, Verdict.ALLOW_WITH_OBLIGATIONS)
+        self.assertIn("rag_downstream_sharing_permitted=false", d.constraints)
 
 
 class SpecVersionTests(unittest.TestCase):
