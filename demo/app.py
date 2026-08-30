@@ -26,8 +26,8 @@ from sphragis import Governance, Operation, Verdict, evaluate, parse_governance 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 PRESETS = {
-    "Open Minimal": EXAMPLES / "open_minimal.dclg.xml",
-    "Restricted Case": EXAMPLES / "restricted_case.dclg.xml",
+    "Open Minimal": EXAMPLES / "open_minimal.dclg",
+    "Restricted Case": EXAMPLES / "restricted_case.dclg",
     "Custom": None,
 }
 
