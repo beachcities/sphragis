@@ -1,12 +1,17 @@
 """Parse governance and compliance metadata from a DocLang document.
 
-Per the DocLang specification, governance and compliance metadata MUST be
-expressed at the document level inside ``<head>`` (and MAY be overridden at
-component level; component-level overrides are not yet implemented here).
+Per the DocLang specification's *Future Extensions* section (informative;
+titled Appendix C in v0.4), governance and compliance metadata MUST be
+expressed at the document level
+inside ``<head>`` (and MAY be overridden at component level; component-level
+overrides are not yet implemented here).
 
 This parser is deliberately tolerant: it reads what is present and reports
 it. Validation of the document itself should be done with the reference
-validator (``pip install doclang`` -> ``doclang validate``).
+validator (``pip install "doclang[schematron-saxon]"`` -> ``doclang validate``).
+Elements in no namespace or in the official DocLang namespace
+(``https://www.doclang.ai/ns/v0``) are recognized; elements in any other
+namespace are ignored rather than mistaken for governance declarations.
 """
 
 from __future__ import annotations
@@ -16,8 +21,37 @@ from pathlib import Path
 
 from .model import Governance
 
-# Element names defined in the DocLang spec (v0.4.0), "Governance and
-# compliance metadata". Grouped here for reference and for `inspect`.
+# The DocLang *specification* version whose governance appendix this kit
+# tracks (distinct from the reference-toolkit release, currently v0.7.3).
+SPEC_VERSION = "0.7"
+
+# Spec versions across which the governance vocabulary and policy controls
+# are substantively unchanged (spec 0.4 / toolkit v0.4.0 through spec 0.7 /
+# toolkit v0.7.3).
+SUPPORTED_SPEC_VERSIONS: frozenset[str] = frozenset({"0.4", "0.5", "0.6", "0.7"})
+
+# The official DocLang XML namespace (the spec's optional default xmlns).
+DOCLANG_NAMESPACE = "https://www.doclang.ai/ns/v0"
+
+_ALLOWED_NAMESPACES: frozenset[str] = frozenset({"", DOCLANG_NAMESPACE})
+
+
+class UnsupportedSpecVersionError(ValueError):
+    """The document's root declares a spec version this kit does not track."""
+
+
+class NotADocLangDocumentError(ValueError):
+    """The root element is not ``<doclang>`` in an accepted namespace.
+
+    Per the official schema, the root's local name must be ``doclang`` and
+    its namespace must be empty or the official DocLang namespace. Anything
+    else is refused outright so foreign documents can never smuggle in
+    governance declarations that an evaluator would then trust.
+    """
+
+
+# Element names listed in the DocLang spec's "Governance and compliance
+# metadata" (Future Extensions). Grouped here for reference and for `inspect`.
 GOVERNANCE_GROUPS: dict[str, tuple[str, ...]] = {
     "licensing_compliance": (
         "licenses",
@@ -90,6 +124,7 @@ GOVERNANCE_GROUPS: dict[str, tuple[str, ...]] = {
         "training_scope",
         "training_purpose",
         "training_model_type",
+        "training_data_retention",
         "training_dataset_reuse_allowed",
         "training_derivative_sharing_permitted",
         "training_pii_included",
@@ -122,23 +157,62 @@ def _text_with_unit(elem: ET.Element) -> str:
     return f"{text} {unit}" if unit else text
 
 
+def _local(tag: object) -> str:
+    """Local name of a tag in an accepted namespace, else ``""``.
+
+    Accepted namespaces are the empty namespace and the official DocLang
+    namespace; a tag in any other namespace yields ``""`` so it is never
+    mistaken for a governance declaration.
+    """
+    if not isinstance(tag, str):  # comments / processing instructions
+        return ""
+    if tag.startswith("{"):
+        namespace, _, local = tag[1:].partition("}")
+        return local if namespace in _ALLOWED_NAMESPACES else ""
+    return tag
+
+
 def parse_governance(path: str | Path) -> Governance:
-    """Extract document-level governance metadata from a ``.dclg.xml`` file."""
+    """Extract document-level governance metadata from a ``.dclg`` /
+    ``.dclg.xml`` file.
+
+    The root element must be ``<doclang>`` in an accepted namespace, else
+    :class:`NotADocLangDocumentError` is raised. The root's ``version``
+    attribute, when present, is checked against the spec versions this kit
+    tracks (``SUPPORTED_SPEC_VERSIONS``) and surfaced as
+    ``Governance.spec_version``; an unsupported declared version raises
+    :class:`UnsupportedSpecVersionError`. A missing attribute is tolerated.
+    """
     tree = ET.parse(str(path))
     root = tree.getroot()
-    head = root.find("head")
-    gov = Governance()
+
+    if _local(root.tag) != "doclang":
+        raise NotADocLangDocumentError(
+            f"root element is {root.tag!r}; expected <doclang> in the empty "
+            f"namespace or the official namespace {DOCLANG_NAMESPACE!r}"
+        )
+
+    spec_version = root.get("version")
+    if spec_version is not None and spec_version not in SUPPORTED_SPEC_VERSIONS:
+        raise UnsupportedSpecVersionError(
+            f"document declares spec version {spec_version!r}; "
+            f"this kit tracks {SPEC_VERSION} "
+            f"(supported: {', '.join(sorted(SUPPORTED_SPEC_VERSIONS))})"
+        )
+
+    head = next((child for child in root if _local(child.tag) == "head"), None)
+    gov = Governance(spec_version=spec_version)
     if head is None:
         return gov
 
     for child in head:
-        tag = child.tag
+        tag = _local(child.tag)
         if tag in _CONTAINERS:
             item_tag = _CONTAINERS[tag]
             values = [
                 (item.text or "").strip()
-                for item in child.iter(item_tag)
-                if (item.text or "").strip()
+                for item in child.iter()
+                if _local(item.tag) == item_tag and (item.text or "").strip()
             ]
             if values:
                 gov.elements[tag] = values

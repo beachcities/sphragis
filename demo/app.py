@@ -107,6 +107,9 @@ def main() -> None:
         st.markdown("**Obligations**")
         for o in decision.obligations or ["—"]:
             st.markdown(f"- {o}")
+        st.markdown("**Constraints**")
+        for c in decision.constraints or ["—"]:
+            st.markdown(f"- {c}")
 
     st.divider()
     with st.expander("What this demonstrates", expanded=False):
@@ -127,9 +130,9 @@ provable at the code level.
 
 **3. Obligations are a controller, not a switch.**
 Run a non-PII `extract` against the *Restricted Case* preset. The verdict is
-`allow_with_obligations`, carrying constraints such as
-`extraction_scope=tables_only` and `human_in_the_loop_required`. The decision
-hands the downstream pipeline a *safe path*, not just a yes/no.
+`allow_with_obligations`, carrying the duty `human_in_the_loop_required` and
+the constraint `extraction_scope=tables_only`. The decision hands the
+downstream pipeline a *safe path*, not just a yes/no.
             """
         )
 

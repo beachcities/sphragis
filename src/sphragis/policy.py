@@ -18,8 +18,10 @@ from __future__ import annotations
 from .model import Decision, Governance, Operation, Verdict
 
 # For each operation: the gate elements (all must not be False; in strict
-# mode all must be explicitly True) and the obligation elements
-# (surfaced when present).
+# mode all must be explicitly True) and the condition elements surfaced when
+# present. Conditions split by meaning: `*_required` booleans are duties
+# (obligations), `*_allowed` / `*_permitted` booleans declared false are
+# prohibitions (constraints), and valued elements are scoped constraints.
 _RULES: dict[Operation, dict[str, tuple[str, ...]]] = {
     Operation.EXTRACT: {
         "gates": ("extraction_permitted",),
@@ -54,6 +56,7 @@ _RULES: dict[Operation, dict[str, tuple[str, ...]]] = {
             "rag_query_restrictions",
             "rag_output_attribution_required",
             "rag_output_transformation_required",
+            "rag_downstream_sharing_permitted",
             "rag_audit_required",
         ),
         "pii_gates": ("rag_pii_exposure_allowed", "rag_sensitive_data_exposure_allowed"),
@@ -64,6 +67,9 @@ _RULES: dict[Operation, dict[str, tuple[str, ...]]] = {
             "training_scope",
             "training_purpose",
             "training_model_type",
+            "training_data_retention",
+            "training_dataset_reuse_allowed",
+            "training_derivative_sharing_permitted",
             "training_transformation_required",
             "training_provenance_required",
             "training_audit_required",
@@ -71,7 +77,7 @@ _RULES: dict[Operation, dict[str, tuple[str, ...]]] = {
             "model_output_usage_constraints",
             "right_to_be_forgotten_applicability",
         ),
-        "pii_gates": (),
+        "pii_gates": ("training_pii_included", "training_sensitive_data_included"),
     },
     Operation.SHARE_DOWNSTREAM: {
         "gates": ("downstream_sharing_permitted",),
@@ -98,9 +104,11 @@ def evaluate(
     rules = _RULES[operation]
     reasons: list[str] = []
     obligations: list[str] = []
+    constraints: list[str] = []
 
     # --- gates -----------------------------------------------------------
     explicit_allow = False
+    undeclared_gates: list[str] = []
     for gate in rules["gates"]:
         value = gov.get_bool(gate)
         if value is False:
@@ -113,6 +121,7 @@ def evaluate(
             explicit_allow = True
             reasons.append(f"{gate} is declared true")
         else:
+            undeclared_gates.append(gate)
             reasons.append(f"{gate} is not declared")
 
     # --- PII gates -------------------------------------------------------
@@ -135,24 +144,56 @@ def evaluate(
                 )
 
     # --- unspecified handling ---------------------------------------------
-    if not explicit_allow:
-        if strict:
-            return Decision(
-                operation,
-                Verdict.DENY,
-                reasons=reasons + ["no explicit permission found (strict posture)"],
+    # In strict posture EVERY gate must be explicitly true: a partially
+    # declared gate set (e.g. rag_permitted=true without rag_indexing_allowed)
+    # must not slip through on the strength of one gate alone.
+    if strict and undeclared_gates:
+        if not explicit_allow:
+            extra = "no explicit permission found (strict posture)"
+        else:
+            extra = (
+                "gate(s) not explicitly permitted (strict posture): "
+                + ", ".join(undeclared_gates)
             )
+        return Decision(operation, Verdict.DENY, reasons=reasons + [extra])
+    if not explicit_allow:
         return Decision(operation, Verdict.UNSPECIFIED, reasons=reasons)
 
-    # --- obligations -------------------------------------------------------
+    # --- conditions: obligations vs constraints ----------------------------
     for name in rules["obligations"]:
-        value = gov.get(name)
-        if value is None:
+        declared = gov.get(name)
+        if declared is None:
             continue
-        if gov.get_bool(name) is True:
-            obligations.append(name)
-        elif gov.get_bool(name) is None:  # non-boolean constraint values
-            obligations.append(f"{name}={value}")
+        as_bool = gov.get_bool(name)
+        if name.endswith("_required"):
+            # A duty to perform. False means "not required" and imposes
+            # nothing; a non-boolean value is a duty with a parameter
+            # (e.g. extraction_transformation_required=redact).
+            if as_bool is True:
+                obligations.append(name)
+            elif as_bool is None:
+                obligations.append(f"{name}={declared}")
+        elif name.endswith(("_allowed", "_permitted")):
+            # A permission. False is a prohibition the caller must honor
+            # (e.g. rag_caching_allowed=false): surface it, never drop it.
+            # True grants and imposes nothing.
+            if as_bool is False:
+                constraints.append(f"{name}=false")
+            elif as_bool is None:
+                constraints.append(f"{name}={declared}")
+        else:
+            # Scoped constraint values (scope, purpose, retention, ...).
+            constraints.append(f"{name}={declared}")
 
-    verdict = Verdict.ALLOW_WITH_OBLIGATIONS if obligations else Verdict.ALLOW
-    return Decision(operation, verdict, reasons=reasons, obligations=obligations)
+    verdict = (
+        Verdict.ALLOW_WITH_OBLIGATIONS
+        if obligations or constraints
+        else Verdict.ALLOW
+    )
+    return Decision(
+        operation,
+        verdict,
+        reasons=reasons,
+        obligations=obligations,
+        constraints=constraints,
+    )

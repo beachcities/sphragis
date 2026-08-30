@@ -17,6 +17,14 @@ class Operation(str, Enum):
 
 
 class Verdict(str, Enum):
+    """Outcome categories.
+
+    ``ALLOW_WITH_OBLIGATIONS`` means "allow, with conditions attached" —
+    the conditions being the decision's ``obligations`` (duties) and/or
+    ``constraints`` (restrictions). The historical name is kept for wire
+    compatibility; read it as *allow-with-conditions*.
+    """
+
     ALLOW = "allow"
     ALLOW_WITH_OBLIGATIONS = "allow_with_obligations"
     DENY = "deny"
@@ -30,15 +38,18 @@ class Governance:
     Values are stored as strings exactly as they appear in the document.
     Elements with a ``unit`` attribute are stored as ``"<value> <unit>"``.
     Repeated elements (e.g. ``<license>``) are stored as lists.
+    ``spec_version`` is the DocLang spec version declared on the document
+    root (``version`` attribute), or ``None`` when absent.
     """
 
     elements: dict[str, object] = field(default_factory=dict)
+    spec_version: str | None = None
 
     def get(self, name: str) -> str | None:
         value = self.elements.get(name)
         if isinstance(value, list):
-            return value[0] if value else None
-        return value
+            value = value[0] if value else None
+        return value if isinstance(value, str) else None
 
     def get_bool(self, name: str) -> bool | None:
         value = self.get(name)
@@ -54,12 +65,19 @@ class Governance:
 
 @dataclass
 class Decision:
-    """Outcome of evaluating one operation against one document."""
+    """Outcome of evaluating one operation against one document.
+
+    ``obligations`` are duties the caller must perform (e.g.
+    ``rag_audit_required``); ``constraints`` are restrictions the caller
+    must honor — declared prohibitions (``rag_caching_allowed=false``) and
+    scoped values (``extraction_scope=tables_only``).
+    """
 
     operation: Operation
     verdict: Verdict
     reasons: list[str] = field(default_factory=list)
     obligations: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -67,4 +85,5 @@ class Decision:
             "verdict": self.verdict.value,
             "reasons": self.reasons,
             "obligations": self.obligations,
+            "constraints": self.constraints,
         }

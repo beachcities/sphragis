@@ -18,7 +18,7 @@ Deterministic evaluation of [DocLang](https://github.com/doclang-project/doclang
 
 DocLang documents can carry machine-readable governance metadata in their `<head>`: licensing, data classification, PII posture, and per-operation controls for extraction, RAG, and model training (`extraction_permitted`, `rag_indexing_allowed`, `training_permitted`, ...).
 
-The specification defines these elements as a **declaration**. It does not define an **enforcement mechanism**. Without one, the declaration ends up pasted into a prompt — and a prompt is a request, not a rule.
+The specification defines these elements — today in its *Future Extensions* section (informative; Appendix C in v0.4) — as a **declaration**. It does not define an **enforcement mechanism**. Without one, the declaration ends up pasted into a prompt — and a prompt is a request, not a rule.
 
 `sphragis` is a small, dependency-free evaluation layer that closes this gap: given a DocLang document and an intended operation, it returns a deterministic decision (`allow` / `allow_with_obligations` / `deny`) **before** any probabilistic processing happens. Obligations declared in the document (required transformations, audit logging, human-in-the-loop) are surfaced alongside the verdict so callers can act on them.
 
@@ -28,7 +28,8 @@ To install manually instead:
 ```bash
 pip install -e .
 # optional: the reference validator for the documents themselves
-pip install doclang
+# (since toolkit v0.7.1 the Schematron backend is opt-in)
+pip install "doclang[schematron-saxon]"
 ```
 
 ## Usage
@@ -57,15 +58,19 @@ decision = evaluate(gov, Operation.RAG_INDEX, strict=True)
 
 ## Design
 
-- **Strict by default.** In `strict` posture, anything not explicitly permitted is denied. Pass `--permissive` to treat unspecified declarations as not-denied instead. Sensitive deployments should keep the default.
+- **Strict by default.** In `strict` posture, anything not explicitly permitted is denied — for a multi-gate operation (e.g. `rag_index`), *every* gate must be explicitly true. Pass `--permissive` to treat unspecified declarations as not-denied instead. Sensitive deployments should keep the default.
 - **Declaration vs. enforcement.** The verdict is computed from the document's declared metadata only, with no model in the loop. What the caller does with the verdict (block, transform, log) is the caller's enforcement responsibility — this kit gives you a deterministic, auditable input to it.
+- **Duties, prohibitions, and grants are kept apart.** The decision separates `obligations` (duties to perform, e.g. `rag_audit_required`) from `constraints` (restrictions to honor: declared prohibitions such as `rag_caching_allowed=false`, and scoped values such as `extraction_scope=tables_only`). A permission declared true, or a requirement declared false, imposes nothing — it never masquerades as an obligation. The verdict name `allow_with_obligations` is kept for wire compatibility; read it as *allow, with conditions attached* (obligations and/or constraints).
 - **Stdlib only.** The evaluator has zero runtime dependencies. Document validation is delegated to the reference validator (`doclang validate`).
 
 ## Scope and status
 
-- Tracks the governance and compliance metadata of the DocLang specification **v0.4.0**. The spec is young and may change; this kit pins its interpretation to that version.
+- Tracks the governance and compliance metadata of DocLang specification version **0.7** (reference toolkit **v0.7.3**, July 2026 — the two are versioned separately). This metadata lives in the spec's *Future Extensions* section (informative, not yet normative; titled Appendix C in v0.4); the governance vocabulary and policy controls are substantively unchanged from spec 0.4 (toolkit v0.4.0) through spec 0.7 (toolkit v0.7.3), so this kit's interpretation — originally pinned at v0.4.0 — remains current. The spec is young and may change.
+- The document root's `version` attribute is checked on parse: a declared spec version outside 0.4–0.7 is rejected (`UnsupportedSpecVersionError`; the CLI reports it as a JSON error with exit code 2); a missing attribute is tolerated.
+- Elements are recognized in the empty namespace and the official DocLang namespace (`https://www.doclang.ai/ns/v0`) only; foreign-namespace elements are ignored. The root element must be `<doclang>` in one of those namespaces — anything else is refused (`NotADocLangDocumentError`, reported by the CLI as a JSON error with exit code 2).
+- Since spec 0.7 the recommended file extensions are `.dclg` (document) and `.dclx` (archive). The bundled examples keep their historical `.dclg.xml` names; the evaluator does not depend on the extension.
 - Document-level metadata only. Component-level overrides (defined by the spec) are planned.
-- Controlled vocabularies for enumerated values (e.g. `extraction_scope`) are organization-defined per the spec; this kit surfaces them as obligations rather than interpreting them.
+- Controlled vocabularies for enumerated values (e.g. `extraction_scope`) are organization-defined per the spec; this kit surfaces them as constraints rather than interpreting them.
 - This is an independent project, not affiliated with the DocLang project or the LF AI & Data Foundation.
 
 ## Demo

@@ -7,7 +7,12 @@ import json
 import sys
 
 from .model import Operation
-from .parser import GOVERNANCE_GROUPS, parse_governance
+from .parser import (
+    GOVERNANCE_GROUPS,
+    NotADocLangDocumentError,
+    UnsupportedSpecVersionError,
+    parse_governance,
+)
 from .policy import evaluate
 
 
@@ -27,15 +32,21 @@ def main(argv: list[str] | None = None) -> int:
                         help="the concrete request would touch personal data")
 
     args = parser.parse_args(argv)
-    gov = parse_governance(args.file)
+    try:
+        gov = parse_governance(args.file)
+    except (NotADocLangDocumentError, UnsupportedSpecVersionError) as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
 
     if args.command == "inspect":
         grouped = {
             group: {k: gov.elements[k] for k in names if k in gov.elements}
             for group, names in GOVERNANCE_GROUPS.items()
         }
-        print(json.dumps({g: v for g, v in grouped.items() if v},
-                         indent=2, ensure_ascii=False))
+        out: dict = {g: v for g, v in grouped.items() if v}
+        if gov.spec_version is not None:
+            out = {"spec_version": gov.spec_version, **out}
+        print(json.dumps(out, indent=2, ensure_ascii=False))
         return 0
 
     decision = evaluate(
