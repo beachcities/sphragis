@@ -47,7 +47,7 @@ class RestrictedCaseTests(unittest.TestCase):
     def test_extract_without_pii_allowed_with_obligations(self):
         d = evaluate(self.gov, Operation.EXTRACT, involves_pii=False)
         self.assertEqual(d.verdict, Verdict.ALLOW_WITH_OBLIGATIONS)
-        self.assertIn("extraction_scope=tables_only", d.obligations)
+        self.assertIn("extraction_scope=tables_only", d.constraints)
         self.assertIn("human_in_the_loop_required", d.obligations)
 
     def test_extract_involving_pii_denied(self):

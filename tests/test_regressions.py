@@ -4,9 +4,11 @@ Covers three fixed regressions plus root spec-version checking:
 
 1. Strict posture must require EVERY gate of a multi-gate operation to be
    explicitly true (e.g. ``rag_permitted`` alone must not allow ``rag_index``).
-2. Documents using a default XML namespace must parse.
-3. Declared prohibitions in obligation slots (e.g. ``rag_caching_allowed``
-   = false) must be surfaced in the decision, not silently dropped.
+2. Documents using the official DocLang default namespace must parse, while
+   foreign-namespace elements must NOT be read as governance declarations.
+3. Declared prohibitions (e.g. ``rag_caching_allowed`` = false) must be
+   surfaced as constraints, not silently dropped — while a requirement
+   declared false (``*_audit_required`` = false) must impose nothing.
 4. The root ``version`` attribute is surfaced and validated (spec version,
    e.g. ``0.7`` — distinct from the reference-toolkit release, e.g. v0.7.3).
 """
@@ -19,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from sphragis import (
+    DOCLANG_NAMESPACE,
     Operation,
     SUPPORTED_SPEC_VERSIONS,
     UnsupportedSpecVersionError,
@@ -26,6 +29,7 @@ from sphragis import (
     evaluate,
     parse_governance,
 )
+from sphragis.cli import main as cli_main
 
 
 def _parse(xml: str):
@@ -81,10 +85,11 @@ class StrictMultiGateTests(unittest.TestCase):
 
 
 class NamespaceTests(unittest.TestCase):
-    """Regression 2: default-namespaced DocLang XML must parse."""
+    """Regression 2: the official DocLang namespace must parse; foreign
+    namespaces must not be read as governance declarations."""
 
-    NAMESPACED = """
-    <doclang xmlns="https://doclang.example/ns" version="0.7">
+    NAMESPACED = f"""
+    <doclang xmlns="{DOCLANG_NAMESPACE}" version="0.7">
       <head>
         <licenses>
           <license>https://www.apache.org/licenses/LICENSE-2.0</license>
@@ -93,6 +98,15 @@ class NamespaceTests(unittest.TestCase):
         <rag_indexing_allowed>true</rag_indexing_allowed>
         <extraction_permitted>true</extraction_permitted>
         <extraction_scope>tables_only</extraction_scope>
+      </head>
+    </doclang>
+    """
+
+    FOREIGN = """
+    <doclang xmlns="urn:not-doclang">
+      <head>
+        <rag_permitted>true</rag_permitted>
+        <rag_indexing_allowed>true</rag_indexing_allowed>
       </head>
     </doclang>
     """
@@ -112,11 +126,18 @@ class NamespaceTests(unittest.TestCase):
         self.assertEqual(d.verdict, Verdict.ALLOW)
         d = evaluate(gov, Operation.EXTRACT, strict=True)
         self.assertEqual(d.verdict, Verdict.ALLOW_WITH_OBLIGATIONS)
-        self.assertIn("extraction_scope=tables_only", d.obligations)
+        self.assertIn("extraction_scope=tables_only", d.constraints)
+
+    def test_foreign_namespace_is_not_governance(self):
+        gov = _parse(self.FOREIGN)
+        self.assertEqual(gov.elements, {})
+        d = evaluate(gov, Operation.RAG_INDEX, strict=True)
+        self.assertEqual(d.verdict, Verdict.DENY)
 
 
 class ProhibitionSurfacedTests(unittest.TestCase):
-    """Regression 3: declared-false constraints must appear in the decision."""
+    """Regression 3: prohibitions surface as constraints; a requirement
+    declared false imposes nothing."""
 
     XML = """
     <doclang>
@@ -129,12 +150,46 @@ class ProhibitionSurfacedTests(unittest.TestCase):
     </doclang>
     """
 
-    def test_false_constraint_is_surfaced(self):
+    NOT_REQUIRED = """
+    <doclang>
+      <head>
+        <extraction_permitted>true</extraction_permitted>
+        <extraction_audit_required>false</extraction_audit_required>
+      </head>
+    </doclang>
+    """
+
+    GRANTED = """
+    <doclang>
+      <head>
+        <rag_permitted>true</rag_permitted>
+        <rag_indexing_allowed>true</rag_indexing_allowed>
+        <rag_caching_allowed>true</rag_caching_allowed>
+      </head>
+    </doclang>
+    """
+
+    def test_false_prohibition_is_a_constraint(self):
         gov = _parse(self.XML)
         d = evaluate(gov, Operation.RAG_INDEX, strict=True)
         self.assertEqual(d.verdict, Verdict.ALLOW_WITH_OBLIGATIONS)
-        self.assertIn("rag_caching_allowed=false", d.obligations)
+        self.assertIn("rag_caching_allowed=false", d.constraints)
         self.assertIn("rag_audit_required", d.obligations)
+        self.assertNotIn("rag_caching_allowed=false", d.obligations)
+
+    def test_requirement_false_imposes_nothing(self):
+        gov = _parse(self.NOT_REQUIRED)
+        d = evaluate(gov, Operation.EXTRACT, strict=True)
+        self.assertEqual(d.verdict, Verdict.ALLOW)
+        self.assertEqual(d.obligations, [])
+        self.assertEqual(d.constraints, [])
+
+    def test_permission_true_imposes_nothing(self):
+        gov = _parse(self.GRANTED)
+        d = evaluate(gov, Operation.RAG_INDEX, strict=True)
+        self.assertEqual(d.verdict, Verdict.ALLOW)
+        self.assertEqual(d.obligations, [])
+        self.assertEqual(d.constraints, [])
 
 
 class SpecVersionTests(unittest.TestCase):
@@ -156,6 +211,25 @@ class SpecVersionTests(unittest.TestCase):
         self.assertEqual(
             SUPPORTED_SPEC_VERSIONS, frozenset({"0.4", "0.5", "0.6", "0.7"})
         )
+
+    def test_cli_reports_unsupported_version_without_traceback(self):
+        import contextlib
+        import io
+
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".dclg", delete=False, encoding="utf-8"
+        ) as fh:
+            fh.write('<doclang version="9.9"><head/></doclang>')
+            name = fh.name
+        stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(stderr):
+                code = cli_main(["inspect", name])
+        finally:
+            Path(name).unlink(missing_ok=True)
+        self.assertEqual(code, 2)
+        self.assertIn('"error"', stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
 
 
 if __name__ == "__main__":
